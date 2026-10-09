@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>飞跃 Flyover · 管理后台</title>
+<style>
+:root{--ink:#2B2620;--ink-soft:#7A6F5F;--line:#EAE1D2;--card:#FFFDF8;--sun:#E8843A;--sun-deep:#C9621F}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;background:linear-gradient(160deg,#FBFAF7,#F5F2EC 60%,#EDE7DC);color:var(--ink);min-height:100vh}
+.wrap{max-width:960px;margin:0 auto;padding:28px 18px 60px}
+h1{font-family:"Noto Serif SC",serif;font-size:22px}
+h1 span{color:var(--sun)}
+.sub{color:var(--ink-soft);font-size:13px;margin:2px 0 18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-top:14px}
+label{display:block;font-size:13px;color:var(--ink-soft);margin:10px 0 4px}
+input{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:9px 12px;font-size:14px;background:#fff}
+button{background:linear-gradient(135deg,#FFE0BD,#E8843A);color:#5E3008;border:none;border-radius:10px;padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer;margin-top:12px}
+button.ghost{background:#fff;border:1.5px solid var(--line);color:var(--ink-soft);font-weight:500}
+button.danger{background:#FFF1EC;color:#C0533A;border:1px solid #F3C9BA}
+table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px;table-layout:fixed}
+th,td{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left;word-break:break-all}
+th{color:var(--ink-soft);font-weight:600}
+.col1{width:18%}.col2{width:14%}.col3{width:44%}.col4{width:24%}
+.stat{display:flex;gap:14px;flex-wrap:wrap}
+.stat div{flex:1;min-width:120px;background:#FFF4E6;border-radius:12px;padding:12px;text-align:center}
+.stat b{font-size:22px;color:var(--sun-deep);display:block}
+.stat span{font-size:12px;color:var(--ink-soft)}
+.hide{display:none}
+.msg{font-size:12.5px;color:var(--ink-soft);margin-top:8px}
+.gray{color:#B0A795}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>飞跃 <span>Flyover</span> · 管理后台</h1>
+  <p class="sub">接 Supabase 后端，管理员登录后可在任意设备查看与管理所有用户数据。未登录前只能看到登录框。</p>
+
+  <div class="card" id="loginCard">
+    <label>管理员登录邮箱</label>
+    <input id="email" type="email" placeholder="accept 对应的注册邮箱">
+    <label>密码</label>
+    <input id="pw" type="password" placeholder="管理员密码">
+    <button id="loginBtn">登录</button>
+    <div class="msg" id="loginMsg"></div>
+  </div>
+
+  <div class="card hide" id="dashCard">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <b>用户数据管理</b>
+      <div>
+        <button class="ghost" id="refreshBtn">刷新</button>
+        <button class="ghost" id="logoutBtn">退出</button>
+      </div>
+    </div>
+    <div class="stat">
+      <div><b id="sUsers">0</b><span>注册用户</span></div>
+      <div><b id="sRows">0</b><span>数据条目</span></div>
+      <div><b id="sAct">0</b><span>近7天活跃</span></div>
+    </div>
+    <table><colgroup><col class="col1"><col class="col2"><col class="col3"><col class="col4"></colgroup>
+      <thead><tr><th>用户名/ID</th><th>注册时间</th><th>数据键（前几条）</th><th>操作</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="msg" id="dashMsg"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="backend-config.js"></script>
+<script src="supabase-integration.js"></script>
+<script>
+(function(){
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  var backendReady = window.backendReady && window.backendReady();
+  if(!backendReady){
+    $("loginMsg").textContent = "后端尚未配置：请先在 backend-config.js 填入 Supabase URL 和 anon key。";
+  }
+
+  $("loginBtn").addEventListener("click", async function(){
+    var e=$("email").value.trim(), p=$("pw").value;
+    if(!e||!p){ $("loginMsg").textContent="请输入邮箱和密码"; return; }
+    $("loginMsg").textContent="登录中…";
+    var r = await window.Backend.login(e,p);
+    if(!r.ok){ $("loginMsg").textContent="登录失败："+r.msg; return; }
+    $("loginMsg").textContent="已登录，正在读取数据…";
+    loadDash();
+  });
+
+  $("logoutBtn").addEventListener("click", async function(){
+    await window.Backend.logout();
+    $("loginCard").classList.remove("hide");
+    $("dashCard").classList.add("hide");
+  });
+  $("refreshBtn").addEventListener("click", loadDash);
+
+  async function loadDash(){
+    if(!backendReady){ return; }
+    var users = await window.Backend.adminUsers();
+    $("loginCard").classList.add("hide");
+    $("dashCard").classList.remove("hide");
+    var seenU={}, byU={};
+    users.forEach(function(r){
+      seenU[r.id] = r;
+      if(!byU[r.id]) byU[r.id]=[];
+      byU[r.id].push(r);
+    });
+    var ids = Object.keys(byU);
+    $("sUsers").textContent = ids.length;
+    $("sRows").textContent = users.length;
+    // 近7天活跃（按最新 updated_at 粗算）
+    var cutoff = Date.now()-7*86400000;
+    var act = ids.filter(function(u){
+      return (byU[u].some(function(x){ var t=new Date(x.updated_at).getTime(); return t>=cutoff; }));
+    }).length;
+    $("sAct").textContent = act;
+    var tb=$("rows"); tb.innerHTML="";
+    if(!ids.length){ tb.innerHTML='<tr><td colspan="4" class="gray">还没有注册用户。</td></tr>'; return; }
+    ids.forEach(function(u){
+      var rec=byU[u][0], uname=(rec.username||u).slice(0,18);
+      var keys = byU[u].map(function(x){return x.key;}).slice(0,5).join("、") || "—";
+      var tr=document.createElement("tr");
+      tr.innerHTML='<td>'+esc(uname)+'</td><td>'+esc((rec.created_at||"").slice(0,10))+'</td><td>'+esc(keys)+'</td>'
+        +'<td><button class="danger" data-u="'+esc(u)+'">清空数据</button></td>';
+      tr.querySelector("button").addEventListener("click", async function(){
+        if(!confirm("确定清除该用户的全部云端数据？")) return;
+        var ok = await window.Backend.adminClearUser(u);
+        $("dashMsg").textContent = ok?"已清除":"清除失败（权限或网络）";
+        loadDash();
+      });
+      tb.appendChild(tr);
+    });
+  }
+
+  // 若已登录直接进面板
+  window.Backend.current().then(function(s){ if(s) loadDash(); });
+})();
+</script>
+</body>
+</html>
