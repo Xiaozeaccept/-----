@@ -84,7 +84,9 @@ th{color:var(--ink-soft);font-weight:600}
     $("loginMsg").textContent="登录中…";
     var r = await window.Backend.login(e,p);
     if(!r.ok){ $("loginMsg").textContent="登录失败："+r.msg; return; }
-    $("loginMsg").textContent="已登录，正在读取数据…";
+    $("loginMsg").textContent="已登录，正在校验管理员权限…";
+    var admin = await window.Backend.isAdmin();
+    if(!admin){ await window.Backend.logout(); $("loginMsg").textContent="该账号不是管理员，无权进入后台（请使用管理员邮箱登录）"; return; }
     loadDash();
   });
 

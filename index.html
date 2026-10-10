@@ -1782,7 +1782,9 @@ for(i=2;i&lt;n;i++)
   <div class="sec">
     <h2>更新动态（更新日志）</h2>
     <div class="changelog" id="chlogBox">
-      <div class="cl-item"><span class="cl-date">2026.10.10</span><div><b>接入云端 · 更新</b><p>登录注册、数据存储升级为云端同步，跨设备可同步；后台可管理用户。今日要闻日期自动跟随当天。</p></div></div>
+      <div class="cl-item"><span class="cl-date">2026.10.10 · 第3次</span><div><b>更新（三）</b><p>登录支持网名（本机）与邮箱（云端）两种；抓取实时要闻后日期显示当天；更新日志记录每次更新。</p></div></div>
+      <div class="cl-item"><span class="cl-date">2026.10.10 · 第2次</span><div><b>更新（二）</b><p>登录注册改为真正走 Supabase（邮箱+密码）；数据库新增注册自动建档，新注册用户后台与表编辑器立即可见。</p></div></div>
+      <div class="cl-item"><span class="cl-date">2026.10.10 · 第1次</span><div><b>接入云端 · 更新（一）</b><p>登录注册、数据存储升级为云端同步，跨设备可同步；后台可管理用户。今日要闻日期自动跟随当天。</p></div></div>
       <div class="cl-item"><span class="cl-date">2026.10.09 · 第2次</span><div><b>更新 · 2026.10.09（二）</b><p>部署前打磨：关于面向每位备考人、帮助去技术词、页脚邮箱、上传本地壁纸、错词本、要闻抓取状态、全部诗词双模块。</p></div></div>
       <div class="cl-item"><span class="cl-date">2026.10.09 · 第1次</span><div><b>更新 · 2026.10.09（一）</b><p>英语页大改：可写作文+分析、语法可展开、中英互译、优质英文阅读；网络/C语言加个人见解；模拟考试全屏锁定。</p></div></div>
       <div class="cl-item"><span class="cl-date">2026.10.09</span><div><b>单文件重构上线</b><p>登录注册、个人中心、课程日历、管理员平台、模拟考试、实时要闻、帮助与更新日志。</p></div></div>
@@ -1851,12 +1853,12 @@ for(i=2;i&lt;n;i++)
       <button type="button" class="active" id="tabLogin">登录</button>
       <button type="button" id="tabReg">注册</button>
     </div>
-    <div class="auth-field"><label>用户名</label><input id="authUser" autocomplete="username"></div>
+    <div class="auth-field"><label>用户名 / 邮箱</label><input id="authUser" autocomplete="username"></div>
     <div class="auth-field"><label>密码</label><input id="authPass" type="password" autocomplete="current-password"></div>
     <div class="auth-field"><label>确认密码（注册时）</label><input id="authPass2" type="password" autocomplete="new-password" style="display:none"></div>
     <button class="btn primary" id="authGo" style="width:100%;margin-top:6px">登录</button>
     <div class="save-hint" id="authMsg" style="margin-top:12px"></div>
-    <div class="rt-note" style="margin-top:14px;line-height:1.8">纯前端账号体系，数据只存本机并按账号隔离；适合个人与信任环境自用，请勿存放敏感隐私。</div>
+    <div class="rt-note" style="margin-top:14px;line-height:1.8">用<b>邮箱</b>注册可跨设备云端同步、后台可见；用<b>网名</b>注册仅本机可用。请勿存放敏感隐私。</div>
   </div>
 </div></section>
 
@@ -3349,20 +3351,20 @@ function setAuthMode(m){
 function finishLogin(u,target){ setUser(u); location.hash=target||"#home"; location.reload(); }
 function doAuth(){
   var u=String(aU.value||"").trim().slice(0,60), p=aP.value||"";
-  if(!u){ aMsg.textContent="请输入账号"; return; }
+  if(!u){ aMsg.textContent="请输入账号（邮箱或网名）"; return; }
   if(p.length<4){ aMsg.textContent="密码至少 4 位"; return; }
   var backend=!!(window.Backend&&window.backendReady&&window.backendReady());
+  var email=/^\S+@\S+\.\S+$/.test(u);
   var a=authLoad();
   if(authMode==="reg"){
     if(aP2.value!==p){ aMsg.textContent="两次密码不一致"; return; }
     if(u===ADM_USER){ aMsg.textContent="该账号为保留管理员账号，请换一个账号"; return; }
-    if(!/^\S+@\S+\.\S+$/.test(u)){ aMsg.textContent="注册需使用邮箱（用于云端同步与跨设备登录）"; return; }
     if(a[u]){ aMsg.textContent="该账号已注册，请直接登录"; return; }
     aMsg.textContent="注册中…";
     var salt=Math.random().toString(36).slice(2)+Date.now().toString(36);
     sha256(p,salt).then(function(h){
       function localOk(){ a[u]={salt:salt,h:h,reg:ymd2(new Date())}; authSave(a); finishLogin(u); }
-      if(backend){ window.Backend.signup(u,p).then(function(r){ if(r&&r.ok===false){ aMsg.textContent=r.msg||"注册失败"; return; } localOk(); }); }
+      if(backend&&email){ window.Backend.signup(u,p).then(function(r){ if(r&&r.ok===false){ aMsg.textContent=r.msg||"注册失败"; return; } localOk(); }); }
       else { localOk(); }
     });
   } else {
@@ -3370,13 +3372,18 @@ function doAuth(){
     var rec=a[u];
     if(!rec&&!backend){ aMsg.textContent="账号不存在，请先注册"; return; }
     aMsg.textContent="登录中…";
-    if(backend){
+    if(backend&&email){
       window.Backend.login(u,p).then(function(r){
-        if(r&&r.ok===false){ aMsg.textContent=r.msg||"登录失败，请检查邮箱和密码"; return; }
+        if(r&&r.ok===false){
+          if(rec){ sha256(p,rec.salt).then(function(h){ if(rec.h!==h){ aMsg.textContent="密码不正确"; return; } finishLogin(u); }); }
+          else { aMsg.textContent=r.msg||"登录失败，请检查邮箱和密码"; }
+          return;
+        }
         if(!rec){ var s2=Math.random().toString(36).slice(2)+Date.now().toString(36); a[u]={salt:s2,h:"",reg:ymd2(new Date())}; authSave(a); }
         finishLogin(u);
       });
     } else {
+      if(!rec){ aMsg.textContent="账号不存在，请先注册"; return; }
       sha256(p,rec.salt).then(function(h){ if(rec.h!==h){ aMsg.textContent="密码不正确"; return; } finishLogin(u); });
     }
   }
@@ -3690,7 +3697,7 @@ function realtimeNews(el){
         if(note) note.textContent="抓取失败（网络 / 接口限制），以下为内置要闻。";
         el.innerHTML='<span class="rt-note">抓取失败，以下为内置要闻。</span>'; return;
       }
-      var h='<div class="teaser-head"><span class="tsico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2z"/></svg></span>实时要闻（自动抓取）</div><div class="teaser-list">';
+      var h='<div class="teaser-head"><span class="tsico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2z"/></svg></span>实时要闻（自动抓取）· '+window.todayStr()+' 更新</div><div class="teaser-list">';
       j.items.slice(0,8).forEach(function(it){
         var link=it.link ? "<a href='"+esc(it.link)+"' target='_blank' rel='noopener' style='margin-left:6px;color:var(--sun-deep);flex:none;font-size:11px'>原文</a>" : "";
         h+='<div class="teaser-item"><b>实时</b><span>'+esc(it.title||"")+'</span>'+link+'</div>';

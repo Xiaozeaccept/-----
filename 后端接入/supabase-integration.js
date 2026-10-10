@@ -96,6 +96,12 @@
       var r = await supabase.rpc("admin_users");
       return r.data || [];
     },
+    /* 判断当前登录者是不是管理员（admins 表里才有） */
+    isAdmin: async function () {
+      if (!supabase) return false;
+      var r = await supabase.rpc("is_admin");
+      return !r.error && !!r.data;
+    },
     /* 管理员清除某用户全部云端数据 */
     adminClearUser: async function (userId) {
       if (!supabase) return false;
