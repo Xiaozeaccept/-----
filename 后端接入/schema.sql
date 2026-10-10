@@ -76,3 +76,19 @@ returns table (
   where public.is_admin()
   order by p.created_at desc;
 $$;
+
+-- 8) 注册自动建档：任何在站点/后台注册的 Supabase 用户，登录账号创建后自动在 profiles 生成一条记录，
+--    这样「管理员后台」和「表编辑器」里立刻能看到新注册用户。
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer as $$
+begin
+  insert into public.profiles (id, username) values (new.id, new.email)
+  on conflict (id) do nothing;
+  return new;
+end; $$;
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- 9) 把自己设为管理员：把 <你的邮箱> 换成你注册时用的邮箱，执行一次即可：
+--    insert into public.admins (username) values ('<你的邮箱>') on conflict (username) do nothing;

@@ -3348,21 +3348,37 @@ function setAuthMode(m){
 }
 function finishLogin(u,target){ setUser(u); location.hash=target||"#home"; location.reload(); }
 function doAuth(){
-  var u=String(aU.value||"").trim().slice(0,30), p=aP.value||"";
-  if(!u){ aMsg.textContent="请输入用户名"; return; }
+  var u=String(aU.value||"").trim().slice(0,60), p=aP.value||"";
+  if(!u){ aMsg.textContent="请输入账号"; return; }
   if(p.length<4){ aMsg.textContent="密码至少 4 位"; return; }
+  var backend=!!(window.Backend&&window.backendReady&&window.backendReady());
   var a=authLoad();
   if(authMode==="reg"){
     if(aP2.value!==p){ aMsg.textContent="两次密码不一致"; return; }
-    if(u===ADM_USER){ aMsg.textContent="该账号为保留管理员账号，请换一个用户名"; return; }
-    if(a[u]){ aMsg.textContent="该用户名已注册，请直接登录"; return; }
+    if(u===ADM_USER){ aMsg.textContent="该账号为保留管理员账号，请换一个账号"; return; }
+    if(!/^\S+@\S+\.\S+$/.test(u)){ aMsg.textContent="注册需使用邮箱（用于云端同步与跨设备登录）"; return; }
+    if(a[u]){ aMsg.textContent="该账号已注册，请直接登录"; return; }
+    aMsg.textContent="注册中…";
     var salt=Math.random().toString(36).slice(2)+Date.now().toString(36);
-    sha256(p,salt).then(function(h){ a[u]={salt:salt,h:h,reg:ymd2(new Date())}; authSave(a); if(window.__sbAuth)window.__sbAuth(u,p,"reg"); finishLogin(u); });
+    sha256(p,salt).then(function(h){
+      function localOk(){ a[u]={salt:salt,h:h,reg:ymd2(new Date())}; authSave(a); finishLogin(u); }
+      if(backend){ window.Backend.signup(u,p).then(function(r){ if(r&&r.ok===false){ aMsg.textContent=r.msg||"注册失败"; return; } localOk(); }); }
+      else { localOk(); }
+    });
   } else {
     if(u===ADM_USER){ if(p===ADM_PASS){ finishLogin(u,"#admin"); } else { aMsg.textContent="密码不正确"; } return; }
     var rec=a[u];
-    if(!rec){ aMsg.textContent="账号不存在，请先注册"; return; }
-    sha256(p,rec.salt).then(function(h){ if(rec.h!==h){ aMsg.textContent="密码不正确"; return; } if(window.__sbAuth)window.__sbAuth(u,p,"login"); finishLogin(u); });
+    if(!rec&&!backend){ aMsg.textContent="账号不存在，请先注册"; return; }
+    aMsg.textContent="登录中…";
+    if(backend){
+      window.Backend.login(u,p).then(function(r){
+        if(r&&r.ok===false){ aMsg.textContent=r.msg||"登录失败，请检查邮箱和密码"; return; }
+        if(!rec){ var s2=Math.random().toString(36).slice(2)+Date.now().toString(36); a[u]={salt:s2,h:"",reg:ymd2(new Date())}; authSave(a); }
+        finishLogin(u);
+      });
+    } else {
+      sha256(p,rec.salt).then(function(h){ if(rec.h!==h){ aMsg.textContent="密码不正确"; return; } finishLogin(u); });
+    }
   }
 }
 if($("tabLogin")){
