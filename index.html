@@ -768,6 +768,9 @@ body.wall-custom .site-foot{background:rgba(18,22,30,.6);border-top-color:rgba(2
 @media(max-width:640px){.foot-in{grid-template-columns:1fr 1fr}.acc-grid{grid-template-columns:1fr}}
 
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="后端接入/backend-config.js"></script>
+<script src="后端接入/supabase-integration.js"></script>
 </head>
 <body>
 <nav class="nav"><div class="nav-in">
@@ -1778,7 +1781,8 @@ for(i=2;i&lt;n;i++)
   </div>
   <div class="sec">
     <h2>更新动态（更新日志）</h2>
-    <div class="changelog">
+    <div class="changelog" id="chlogBox">
+      <div class="cl-item"><span class="cl-date">2026.10.10</span><div><b>接入云端 · 更新</b><p>登录注册、数据存储升级为云端同步，跨设备可同步；后台可管理用户。今日要闻日期自动跟随当天。</p></div></div>
       <div class="cl-item"><span class="cl-date">2026.10.09 · 第2次</span><div><b>更新 · 2026.10.09（二）</b><p>部署前打磨：关于面向每位备考人、帮助去技术词、页脚邮箱、上传本地壁纸、错词本、要闻抓取状态、全部诗词双模块。</p></div></div>
       <div class="cl-item"><span class="cl-date">2026.10.09 · 第1次</span><div><b>更新 · 2026.10.09（一）</b><p>英语页大改：可写作文+分析、语法可展开、中英互译、优质英文阅读；网络/C语言加个人见解；模拟考试全屏锁定。</p></div></div>
       <div class="cl-item"><span class="cl-date">2026.10.09</span><div><b>单文件重构上线</b><p>登录注册、个人中心、课程日历、管理员平台、模拟考试、实时要闻、帮助与更新日志。</p></div></div>
@@ -1954,6 +1958,29 @@ for(i=2;i&lt;n;i++)
   function keyN(k){ return window.__uid ? window.__uid+"::"+k : k; }
   window.mbStore = function(k,v){ try{ localStorage.setItem(keyN(k),v); }catch(e){} };
   window.mbLoad = function(k,d){ try{ var v=localStorage.getItem(keyN(k)); return v===null?d:v; }catch(e){ return d; } };
+  /* ===== Supabase 数据同步适配（不影响原功能）===== */
+  (function(){
+    function _bk(){ try{ return (window.Backend && window.backendReady && window.backendReady()) ? window.Backend : null; }catch(e){ return null; } }
+    var _store=window.mbStore;
+    window.mbStore=function(k,v){ _store(k,v); var b=_bk(); if(b){ try{ b.saveData(k,v); }catch(e){} } };
+    /* 登录/注册成功后调用：把同一账号挂到 Supabase（仅当输入是邮箱格式） */
+    window.__sbAuth=function(account,pw,mode){
+      var b=_bk(); if(!b) return Promise.resolve();
+      var email=String(account||"").trim();
+      if(!/^\S+@\S+\.\S+$/.test(email)) return Promise.resolve();
+      return (mode==="reg"?b.signup(email,pw):b.login(email,pw)).catch(function(){});
+    };
+    /* 页面打开：有 Supabase 会话时把云端数据拉回本地 */
+    window.__sbPull=function(){
+      var b=_bk(); if(!b) return Promise.resolve();
+      return b.current().then(function(s){
+        if(!s) return;
+        var keys=["mb.schedule","mb.done","mb.streak","mb.last","mb.goal","mb.wrongbook","mb.notes","mb.focus","mb.goaltoday"];
+        keys.forEach(function(k){ b.loadData(k).then(function(v){ if(v!==null&&v!==undefined&&v!==""){ try{ window.mbStore(k, typeof v==="string"?v:JSON.stringify(v)); }catch(e){} } }); });
+      }).catch(function(){});
+    };
+    try{ setTimeout(window.__sbPull,1500); }catch(e){}
+  })();
   /* 图片压缩：避免超大图超出 localStorage 容量 */
   window.mbDownscale=function(dataURL,maxW,quality,ok,fail){
     var img=new Image();
@@ -2091,6 +2118,66 @@ for(i=2;i&lt;n;i++)
        ]}
      ],
      inspire:"今天这些事，跟你找工作的焦虑其实对得上：国家在猛推 AI、循环经济、新能源和核电，说明技术岗位在扩张；交通、文旅、服务消费在回暖。你学的是信息安全——AI 落地、数据流转越猛，安全和运维的需求只会更大。把网课啃完、证考到手，你就站在了风口上。"
+    },
+    {date:"2026-10-09",
+     groups:[
+       {id:"policy", label:"国家政策", items:[
+         {t:"扩内需、稳增长政策持续加力，消费与投资协同发力", tag:"政策·内需", d:"围绕扩内需与稳增长，多部门协同推出一揽子举措，激发市场活力。"},
+         {t:"数据要素市场化改革加快推进，数字经济基础更实", tag:"数字·数据", d:"推动数据确权、流通与交易，为数字经济注入新动能。"},
+         {t:"民生保障清单扩容，教育医疗养老投入加大", tag:"民生·保障", d:"持续补齐教育、医疗、养老短板，增强人民群众获得感。"}
+       ]},
+       {id:"ai", label:"AI · 科技", items:[
+         {t:"AI 大模型加速行业落地，安全与治理并重", tag:"AI·安全", d:"大模型在政务、金融、制造等领域铺开，安全合规成为刚需。"},
+         {t:"信创产业生态不断完善，国产软硬件替代提速", tag:"信创·自主", d:"信息技术应用创新全链条推进，自主可控需求持续释放。"}
+       ]},
+       {id:"econ", label:"经济 · 金融", items:[
+         {t:"资本市场改革深化，投融资结构持续优化", tag:"金融·改革", d:"完善资本市场基础制度，更好服务实体经济与新质生产力。"},
+         {t:"新型基础设施建设提速，为发展蓄能", tag:"新基建", d:"数据中心、算力网络等新基建加快建设，夯实数字经济底座。"}
+       ]},
+       {id:"life", label:"民生 · 交通", items:[
+         {t:"智慧交通与绿色出行并举，城市运行更高效", tag:"交通·智慧", d:"公共交通、智慧出行协同推进，绿色低碳理念不断落地。"},
+         {t:"就业服务体系完善，重点群体帮扶更精准", tag:"民生·就业", d:"强化高校毕业生等群体就业服务，拓展就业渠道。"}
+       ]},
+       {id:"culture", label:"文体 · 区域", items:[
+         {t:"区域协调发展走深，东西部协作持续深化", tag:"区域·协作", d:"东西部协作与对口支援深入推进，区域发展更均衡。"},
+         {t:"公共文化服务提质，全民阅读氛围更浓", tag:"文化·民生", d:"图书馆、书店与数字阅读协同发展，书香社会加快建设。"}
+       ]},
+       {id:"world", label:"网络 · 时事", items:[
+         {t:"全球数字经济治理议题升温，数据跨境流动受关注", tag:"国际·数据", d:"多国围绕数据跨境、AI 治理等议题加强沟通与合作。"},
+         {t:"网络安全形势复杂，防护能力建设更受重视", tag:"国际·安全", d:"网络攻防博弈加剧，各国加大关键信息基础设施防护投入。"}
+       ]}
+     ],
+     inspire:"数据、AI、信创、网络安全——这几个方向的信息安全专业都能对上。今天多看一条，明天就多一分底气。"
+    },
+    {date:"2026-10-10",
+     groups:[
+       {id:"policy", label:"国家政策", items:[
+         {t:"创新驱动发展纵深推进，新质生产力加快形成", tag:"政策·创新", d:"围绕科技创新与产业升级，政策持续向新质生产力倾斜。"},
+         {t:"高水平对外开放稳步扩大，外资营商环境更优", tag:"开放·外资", d:"持续优化营商环境，吸引高质量外资，扩大制度型开放。"},
+         {t:"数字中国建设提速，政务与产业数字化同步推进", tag:"数字·治理", d:"数字政府与产业数字化转型协同，治理能力持续提升。"}
+       ]},
+       {id:"ai", label:"AI · 科技", items:[
+         {t:"AI 安全成为行业焦点，攻防与合规需求大增", tag:"AI·安全", d:"大模型规模化应用下，AI 安全评估、对抗测试、合规审计岗位走俏。"},
+         {t:"智能算力布局加快，数据中心绿色化转型", tag:"算力·绿色", d:"东数西算与绿电协同，算力供给向绿色、高效方向升级。"}
+       ]},
+       {id:"econ", label:"经济 · 金融", items:[
+         {t:"中小企业融资环境改善，专精特新培育提速", tag:"金融·实体", d:"金融资源向小微企业、专精特新企业倾斜，实体支撑更实。"},
+         {t:"消费市场稳步回暖，服务消费潜力释放", tag:"消费·服务", d:"文旅、餐饮、健康等服务消费持续增长，成为内需重要引擎。"}
+       ]},
+       {id:"life", label:"民生 · 交通", items:[
+         {t:"民生实事落地见效，群众获得感持续提升", tag:"民生·实事", d:"教育、医疗、养老、住房等民生工程扎实推进。"},
+         {t:"城市更新与社区治理并进，宜居水平提升", tag:"城市·治理", d:"老旧小区改造与智慧社区建设协同，城市生活更宜居。"}
+       ]},
+       {id:"culture", label:"文体 · 区域", items:[
+         {t:"乡村振兴全面推进，县域经济活力增强", tag:"区域·乡村", d:"特色产业与基础设施同步提升，乡村发展基础更牢。"},
+         {t:"体育赛事与全民健身协同，健康中国深入推进", tag:"体育·健康", d:"大众体育赛事增多，全民健身公共服务不断完善。"}
+       ]},
+       {id:"world", label:"网络 · 时事", items:[
+         {t:"全球 AI 治理规则酝酿，多边协作与监管并进", tag:"国际·AI治理", d:"各国加快 AI 治理框架建设，安全、伦理、标准成为博弈焦点。"},
+         {t:"供应链安全受重视，关键产业自主可控成趋势", tag:"国际·供应链", d:"地缘变化推动供应链重构，自主可控与多元化布局并行。"}
+       ]}
+     ],
+     inspire:"今天 10-10，离明年 4-18 的考试越来越近了。要闻里 AI 安全、算力、数据、网络安全全在风口上——把基础课啃透，机会就是你的。稳住节奏，一天一步。"
     }
   ];
   function __esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
@@ -3270,12 +3357,12 @@ function doAuth(){
     if(u===ADM_USER){ aMsg.textContent="该账号为保留管理员账号，请换一个用户名"; return; }
     if(a[u]){ aMsg.textContent="该用户名已注册，请直接登录"; return; }
     var salt=Math.random().toString(36).slice(2)+Date.now().toString(36);
-    sha256(p,salt).then(function(h){ a[u]={salt:salt,h:h,reg:ymd2(new Date())}; authSave(a); finishLogin(u); });
+    sha256(p,salt).then(function(h){ a[u]={salt:salt,h:h,reg:ymd2(new Date())}; authSave(a); if(window.__sbAuth)window.__sbAuth(u,p,"reg"); finishLogin(u); });
   } else {
     if(u===ADM_USER){ if(p===ADM_PASS){ finishLogin(u,"#admin"); } else { aMsg.textContent="密码不正确"; } return; }
     var rec=a[u];
     if(!rec){ aMsg.textContent="账号不存在，请先注册"; return; }
-    sha256(p,rec.salt).then(function(h){ if(rec.h!==h){ aMsg.textContent="密码不正确"; return; } finishLogin(u); });
+    sha256(p,rec.salt).then(function(h){ if(rec.h!==h){ aMsg.textContent="密码不正确"; return; } if(window.__sbAuth)window.__sbAuth(u,p,"login"); finishLogin(u); });
   }
 }
 if($("tabLogin")){
@@ -3353,6 +3440,23 @@ function logActivity(route){
   if(arr.length>300) arr=arr.slice(-300);
   rawSet(LOG_KEY,JSON.stringify(arr));
 }
+
+/* ---------- 网站版本与更新动态自动记录（每次更新自动加一条） ---------- */
+window.__SITE_VERSION="2026.10.10";
+(function(){
+  var SV="mb.sysver", VER=window.__SITE_VERSION||"", seen="";
+  try{ seen=localStorage.getItem(SV)||""; }catch(e){}
+  if(VER && seen && seen!==VER){
+    var box=document.getElementById("chlogBox");
+    if(box){
+      var it=document.createElement("div"); it.className="cl-item";
+      var dt="2026.10.10"; try{ dt=(window.todayStr?window.todayStr():dt).replace(/-/g,"."); }catch(e){}
+      it.innerHTML='<span class="cl-date">'+dt+'</span><div><b>网站更新 · '+VER+'</b><p>本次更新已自动记录，具体内容见上方版本说明。</p></div>';
+      box.insertBefore(it, box.firstChild);
+    }
+  }
+  try{ localStorage.setItem(SV,VER); }catch(e){}
+})();
 
 /* ---------- 课表数据（可编辑） ---------- */
 var CAL_KEY="mb.schedule";
